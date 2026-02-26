@@ -96,8 +96,8 @@ private:
 	// Hooks the necessary game functions to operate the plugin
 	void Hook();
 
-	// Determines whether Musty's training pack is loaded
-	bool IsMustysPack(TrainingEditorWrapper tw);
+	// Determines whether we are in a supported mode (custom training or freeplay)
+	bool IsSupportedMode();
 
 	// Measures the speedflip being performed
 	void Measure(CarWrapper car, shared_ptr<GameWrapper> gameWrapper);
@@ -133,4 +133,3 @@ private:
 	ImGui::FileDialog attemptFileDialog;
 	ImGui::FileDialog botFileDialog;
 };
-
