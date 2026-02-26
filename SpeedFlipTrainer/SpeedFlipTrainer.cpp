@@ -7,7 +7,7 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-BAKKESMOD_PLUGIN(SpeedFlipTrainer, "Speedflip trainer", plugin_version, PLUGINTYPE_CUSTOM_TRAINING)
+BAKKESMOD_PLUGIN(SpeedFlipTrainer, "Speedflip trainer_V2", plugin_version, PLUGINTYPE_CUSTOM_TRAINING)
 
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
 
@@ -140,11 +140,8 @@ void SpeedFlipTrainer::Hook()
 				attempt.startedNoBoost = true;
 		}
 
-		// ball hasn't exploded or been hit yet
-		if (!attempt.exploded && !attempt.hit)
-		{
-			Measure(car, gameWrapper);
-		}
+		// Measure the attempt
+		Measure(car, gameWrapper);
 	});
 
 	gameWrapper->HookEvent("Function TAGame.Ball_TA.RecordCarHit",
@@ -229,20 +226,49 @@ void SpeedFlipTrainer::Hook()
 	});
 }
 
+void SpeedFlipTrainer::ResetToDefaults()
+{
+	LOG("Resetting all settings to defaults");
+
+	// Reset all settings to their default values
+	*enabled = true;
+	*showAngleMeter = true;
+	*showPositionMeter = true;
+	*showFlipMeter = true;
+	*showJumpMeter = true;
+	*changeSpeed = false;
+	*speed = 1.0f;
+	*rememberSpeed = true;
+	*numHitsChangedSpeed = 3;
+	*speedIncrement = 0.1f;
+	*optimalLeftAngle = -30;
+	*optimalRightAngle = 30;
+	*flipCancelThreshold = 13;
+	*jumpLow = 40;
+	*jumpHigh = 90;
+	*saveToFile = false;
+
+	// Reset game speed to 1.0
+	auto speedCvar = _globalCvarManager->getCvar("sv_soccar_gamespeed");
+	if (!speedCvar.IsNull())
+	{
+		speedCvar.setValue(1.0f);
+	}
+
+	// Reset attempt data
+	attempt.Reset();
+	startingPhysicsFrame = -1;
+
+	// Reset consecutive counters
+	consecutiveHits = 0;
+	consecutiveMiss = 0;
+
+	gameWrapper->LogToChatbox("SpeedFlip Trainer: All settings reset to defaults");
+}
+
 void SpeedFlipTrainer::onLoad()
 {
 	_globalCvarManager = cvarManager;
-
-	cvarManager->registerCvar("sf_reset_bind", "F7", "Key used for running sf_reset_defaults command.", true, false, 0, false, 0, true);
-	cvarManager->registerNotifier("sf_bind_reset_key", [this](std::vector<std::string> params) {
-		ApplyResetBind();
-	}, "Bind sf_reset_defaults to the key in sf_reset_bind.", PERMISSION_ALL);
-
-	cvarManager->registerNotifier("sf_reset_defaults", [this](std::vector<std::string> params) {
-		ResetSettingsToDefaults();
-		cvarManager->log("SpeedFlipTrainer values reset to defaults.");
-		gameWrapper->LogToChatbox("[SpeedFlipTrainer] Values reset to defaults");
-	}, "Reset SpeedFlipTrainer values and current run state to defaults.", PERMISSION_ALL);
 
 	cvarManager->registerCvar("sf_enabled", "1", "Enabled speedflip training.", true, false, 0, false, 0, true).bindTo(enabled);
 	cvarManager->getCvar("sf_enabled").addOnValueChanged([this](string oldVal, CVarWrapper cvar)
@@ -254,7 +280,19 @@ void SpeedFlipTrainer::onLoad()
 		}
 	});
 
-	cvarManager->registerCvar("sf_save_attempts", "0", "Save attmempts to a file.", true, false, 0, false, 0, true).bindTo(saveToFile);
+	// Register reset command with keybind support
+	cvarManager->registerNotifier("sf_reset_defaults", [this](std::vector<std::string> args) {
+		ResetToDefaults();
+	}, "Reset all SpeedFlip Trainer settings to defaults", PERMISSION_ALL);
+
+	// Register command to manually reset current attempt
+	cvarManager->registerNotifier("sf_reset_attempt", [this](std::vector<std::string> args) {
+		attempt.Reset();
+		startingPhysicsFrame = -1;
+		gameWrapper->LogToChatbox("SpeedFlip Trainer: Attempt data cleared");
+	}, "Clear current attempt data to start fresh", PERMISSION_ALL);
+
+	cvarManager->registerCvar("sf_save_attempts", "0", "Save attempts to a file.", true, false, 0, false, 0, true).bindTo(saveToFile);
 
 	cvarManager->registerCvar("sf_change_speed", "0", "Change game speed on consecutive hits and misses.", true, false, 0, false, 0, true).bindTo(changeSpeed);
 	cvarManager->registerCvar("sf_speed", "1.0", "Change game speed on consecutive hits and misses.", true, false, 0.0, false, 1.0, true).bindTo(speed);
@@ -270,8 +308,6 @@ void SpeedFlipTrainer::onLoad()
 	cvarManager->registerCvar("sf_show_position", "1", "Show horizontal position meter.", true, false, 0, false, 0, true).bindTo(showPositionMeter);
 	cvarManager->registerCvar("sf_show_jump", "1", "Show jump meter.", true, false, 0, false, 0, true).bindTo(showJumpMeter);
 	cvarManager->registerCvar("sf_show_flip", "1", "Show flip cancel meter.", true, false, 0, false, 0, true).bindTo(showFlipMeter);
-
-	ApplyResetBind();
 
 	//cvarManager->registerCvar("sf_jump_low", "40", "Low threshold for first jump of speedflip.", true, true, 10, true, 110, false).bindTo(jumpLow);
 	//cvarManager->registerCvar("sf_jump_high", "90", "High threshold for first jump of speedflip.", true, true, 20, true, 120, false).bindTo(jumpHigh);
@@ -295,65 +331,6 @@ void SpeedFlipTrainer::onLoad()
 		botFileDialog.name = "Select bot file";
 	}
 
-}
-
-void SpeedFlipTrainer::ResetTrainingState()
-{
-	attempt = Attempt();
-	replayAttempt = Attempt();
-	bot = BotAttempt();
-	startingPhysicsFrame = -1;
-	initialTime = 0;
-	ticksBeforeTimeExpired = 0;
-	consecutiveHits = 0;
-	consecutiveMiss = 0;
-	mode = SpeedFlipTrainerMode::Manual;
-}
-
-void SpeedFlipTrainer::ResetSettingsToDefaults()
-{
-	ResetTrainingState();
-
-	auto speedCvar = cvarManager->getCvar("sv_soccar_gamespeed");
-	if (speedCvar)
-		speedCvar.setValue(1.0f);
-
-	cvarManager->getCvar("sf_enabled").setValue(true);
-	cvarManager->getCvar("sf_save_attempts").setValue(false);
-	cvarManager->getCvar("sf_change_speed").setValue(false);
-	cvarManager->getCvar("sf_speed").setValue(1.0f);
-	cvarManager->getCvar("sf_remember_speed").setValue(true);
-	cvarManager->getCvar("sf_num_hits").setValue(3);
-	cvarManager->getCvar("sf_speed_increment").setValue(0.05f);
-	cvarManager->getCvar("sf_left_angle").setValue(-30);
-	cvarManager->getCvar("sf_right_angle").setValue(30);
-	cvarManager->getCvar("sf_cancel_threshold").setValue(10);
-	cvarManager->getCvar("sf_show_angle").setValue(true);
-	cvarManager->getCvar("sf_show_position").setValue(true);
-	cvarManager->getCvar("sf_show_jump").setValue(true);
-	cvarManager->getCvar("sf_show_flip").setValue(true);
-	cvarManager->getCvar("sf_reset_bind").setValue("F7");
-	ApplyResetBind();
-
-	if (!loaded)
-		Hook();
-}
-
-void SpeedFlipTrainer::ApplyResetBind()
-{
-	auto keyCvar = cvarManager->getCvar("sf_reset_bind");
-	if (!keyCvar)
-		return;
-
-	std::string key = keyCvar.getStringValue();
-	if (key.empty())
-	{
-		cvarManager->log("sf_reset_bind is empty, skipping keybind.");
-		return;
-	}
-
-	cvarManager->executeCommand("bind " + key + " \"sf_reset_defaults\"", false);
-	cvarManager->log("SpeedFlipTrainer reset key bound to: " + key);
 }
 
 void SpeedFlipTrainer::onUnload()

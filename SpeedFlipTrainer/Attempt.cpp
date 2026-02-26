@@ -1,6 +1,28 @@
 #include "pch.h"
 #include "Attempt.h"
 
+void Attempt::Reset()
+{
+	startedInAir = false;
+	startedNoBoost = false;
+	jumpTick = 0;
+	jumped = false;
+	flipCancelTick = 0;
+	flipCanceled = false;
+	dodgeAngle = 0;
+	dodgedTick = 0;
+	dodged = false;
+	positionY = -1.1;
+	traveledY = 0;
+	ticksNotPressingBoost = 0;
+	ticksNotPressingThrottle = 0;
+	ticksToBall = 0;
+	timeToBall = 0.0f;
+	hit = false;
+	exploded = false;
+	inputs.clear();
+}
+
 #include <iostream>
 #include <fstream>
 #include <sstream>

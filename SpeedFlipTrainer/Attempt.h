@@ -48,6 +48,7 @@ public:
 	filesystem::path GetFilename(filesystem::path dir);
 	void WriteInputsToFile(std::filesystem::path filepath);
 	void ReadInputsFromFile(std::filesystem::path filepath);
+	void Reset();
 
 	map<int, ControllerInput> inputs;
 private:

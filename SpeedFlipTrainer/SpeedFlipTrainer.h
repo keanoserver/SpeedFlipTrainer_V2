@@ -96,13 +96,11 @@ private:
 	// Hooks the necessary game functions to operate the plugin
 	void Hook();
 
-	// Reset plugin values and current attempt state to defaults
-	void ResetTrainingState();
-	void ResetSettingsToDefaults();
-	void ApplyResetBind();
-
 	// Determines whether we are in a supported mode (custom training or freeplay)
 	bool IsSupportedMode();
+
+	// Resets all settings to default values
+	void ResetToDefaults();
 
 	// Measures the speedflip being performed
 	void Measure(CarWrapper car, shared_ptr<GameWrapper> gameWrapper);
@@ -123,7 +121,7 @@ private:
 	// Inherited via PluginWindow
 	bool isWindowOpen_ = false;
 	bool isMinimized_ = false;
-	std::string menuTitle_ = "Speedflip Trainer";
+	std::string menuTitle_ = "Speedflip Trainer_V2";
 
 	virtual void Render() override;
 	virtual std::string GetMenuName() override;

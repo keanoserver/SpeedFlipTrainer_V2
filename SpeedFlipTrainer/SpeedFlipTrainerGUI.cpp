@@ -3,13 +3,9 @@
 #include "ImGuiFileDialog.h"
 #include "BotAttempt.h"
 
-#include <algorithm>
-#include <array>
-#include <cctype>
-
 // Plugin Settings Window code here
 std::string SpeedFlipTrainer::GetPluginName() {
-	return "SpeedFlipTrainer";
+	return "SpeedFlipTrainer_V2";
 }
 
 // Render the plugin settings here
@@ -174,35 +170,6 @@ void SpeedFlipTrainer::RenderSettings() {
 		speedIncCvar.setValue(speedInc);
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("The value to add or subtract from game speed.");
-
-	// ------------------------ RESET SETTINGS ----------------------------------
-	ImGui::Separator();
-	ImGui::TextUnformatted("Reset to defaults");
-
-	CVarWrapper resetBindCvar = cvarManager->getCvar("sf_reset_bind");
-	if (!resetBindCvar) return;
-
-	std::string resetBind = resetBindCvar.getStringValue();
-	std::array<char, 32> keyBuffer{};
-	size_t maxCopyLen = keyBuffer.size() - 1;
-	if (resetBind.size() > maxCopyLen)
-		resetBind = resetBind.substr(0, maxCopyLen);
-	std::copy(resetBind.begin(), resetBind.end(), keyBuffer.begin());
-
-	if (ImGui::InputText("Reset key", keyBuffer.data(), keyBuffer.size()))
-	{
-		std::string newKey(keyBuffer.data());
-		std::transform(newKey.begin(), newKey.end(), newKey.begin(), ::toupper);
-		resetBindCvar.setValue(newKey);
-	}
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Keyboard key that will run the reset action (example: F7). Click Apply Reset Keybind after changing.");
-
-	if (ImGui::Button("Apply reset keybind"))
-		cvarManager->executeCommand("sf_bind_reset_key", false);
-	ImGui::SameLine();
-	if (ImGui::Button("Reset now"))
-		cvarManager->executeCommand("sf_reset_defaults", false);
 }
 
 
