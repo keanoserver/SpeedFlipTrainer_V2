@@ -96,6 +96,11 @@ private:
 	// Hooks the necessary game functions to operate the plugin
 	void Hook();
 
+	// Reset plugin values and current attempt state to defaults
+	void ResetTrainingState();
+	void ResetSettingsToDefaults();
+	void ApplyResetBind();
+
 	// Determines whether we are in a supported mode (custom training or freeplay)
 	bool IsSupportedMode();
 
