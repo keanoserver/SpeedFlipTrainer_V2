@@ -110,7 +110,7 @@ void SpeedFlipTrainer::Hook()
 
 	gameWrapper->HookEventWithCaller<CarWrapper>("Function TAGame.Car_TA.SetVehicleInput",
 		[this](CarWrapper car, void* params, std::string eventname) {
-		if (!*enabled || !loaded || !gameWrapper->IsInCustomTraining())
+		if (!*enabled || !loaded || !IsSupportedMode())
 			return;
 
 		if (car.IsNull())
@@ -126,12 +126,8 @@ void SpeedFlipTrainer::Hook()
 		else if (mode == SpeedFlipTrainerMode::Replay)
 			PlayAttempt(&replayAttempt, gameWrapper, input);
 
-		// Has time started counting down?
-		float timeLeft = gameWrapper->GetCurrentGameState().GetGameTimeRemaining();
 		int currentFrame = gameWrapper->GetEngine().GetPhysicsFrame();
-		if (initialTime <= 0 || timeLeft == initialTime) // if we have no time OR countdown hasn't started just return
-			return;
-		if (startingPhysicsFrame < 0 && timeLeft < initialTime) // if this is the first frame the countdown has begun
+		if (startingPhysicsFrame < 0)
 		{
 			startingPhysicsFrame = currentFrame;
 
@@ -153,18 +149,18 @@ void SpeedFlipTrainer::Hook()
 
 	gameWrapper->HookEvent("Function TAGame.Ball_TA.RecordCarHit",
 		[this](std::string eventname) {
-		if (!*enabled || !loaded || !gameWrapper->IsInCustomTraining() || attempt.hit || attempt.exploded)
+		if (!*enabled || !loaded || !IsSupportedMode() || attempt.hit || attempt.exploded || startingPhysicsFrame < 0)
 			return;
 
 		attempt.ticksToBall = gameWrapper->GetLocalCar().GetLastBallImpactFrame() - startingPhysicsFrame;
-		attempt.timeToBall = initialTime - gameWrapper->GetCurrentGameState().GetGameTimeRemaining();
+		attempt.timeToBall = attempt.ticksToBall / 120.0f;
 		attempt.hit = true;
 		LOG("Time to ball: {0:.3f}s after {1} tick", attempt.timeToBall, attempt.ticksToBall);
 	});
 
 	gameWrapper->HookEvent("Function TAGame.Ball_TA.Explode", 
 		[this](std::string eventName) {
-		if (!*enabled || !loaded || !gameWrapper->IsInCustomTraining())
+		if (!*enabled || !loaded || !IsSupportedMode())
 			return;
 
 		auto ball = gameWrapper->GetGameEventAsServer().GetBall();
@@ -180,7 +176,7 @@ void SpeedFlipTrainer::Hook()
 
 	gameWrapper->HookEventPost("Function Engine.Controller.Restart", 
 		[this](std::string eventName) {
-		if (!*enabled || !loaded || !gameWrapper->IsInCustomTraining())
+		if (!*enabled || !loaded || !IsSupportedMode())
 			return;
 
 		//gameWrapper->GetCurrentGameState().SetGameTimeRemaining(2.14);
@@ -269,16 +265,7 @@ void SpeedFlipTrainer::onLoad()
 
 	if (*enabled)
 	{
-		gameWrapper->HookEventWithCaller<ActorWrapper>("Function TAGame.GameEvent_TrainingEditor_TA.LoadRound", [this](ActorWrapper cw, void* params, std::string eventName) {
-			if (!*enabled || !IsMustysPack((TrainingEditorWrapper)cw.memory_address))
-				return;
-			Hook();
-		});
-
-		gameWrapper->HookEventWithCaller<ActorWrapper>("Function TAGame.GameEvent_TrainingEditor_TA.Destroyed", [this](ActorWrapper cw, void* params, std::string eventName) {
-			if(loaded)
-				onUnload();
-		});
+		Hook();
 
 		dataDir = gameWrapper->GetDataFolder().append("speedflip");
 		if (!std::filesystem::exists(dataDir))
@@ -311,33 +298,14 @@ void SpeedFlipTrainer::onUnload()
 	gameWrapper->UnregisterDrawables();
 }
 
-bool SpeedFlipTrainer::IsMustysPack(TrainingEditorWrapper tw)
+bool SpeedFlipTrainer::IsSupportedMode()
 {
-	if (!tw.IsNull())
-	{
-		GameEditorSaveDataWrapper data = tw.GetTrainingData();
-		if (!data.IsNull())
-		{
-			TrainingEditorSaveDataWrapper td = data.GetTrainingData();
-			if (!td.IsNull())
-			{
-				if (!td.GetCode().IsNull())
-				{
-					auto code = td.GetCode().ToString();
-					if (code == "A503-264C-A7EB-D282")
-					{
-						return true;
-					}
-				}
-			}
-		}
-	}
-	return false;
+	return gameWrapper->IsInCustomTraining() || gameWrapper->IsInFreeplay();
 }
 
 void SpeedFlipTrainer::RenderMeters(CanvasWrapper canvas)
 {
-	bool training = gameWrapper->IsInCustomTraining();
+	bool training = IsSupportedMode();
 
 	if (!*enabled || !loaded || !training) return;
 
